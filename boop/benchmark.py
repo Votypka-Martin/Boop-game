@@ -3,7 +3,7 @@ import random
 
 list = [0] * 65536
 
-list2d = [[0] * 6] * 6
+list2d = [[random.randint(0, 4) for _ in range(6)] for _ in range(6)]
 
 start = time.perf_counter()
 dict = {}
@@ -40,7 +40,7 @@ def num_ops_test():
     mask = 65535
     res = 0
     for j in range(1000000):
-        res = mask + mask - mask * 2
+        res = mask + mask - mask * 2 + mask / 2 + mask % 2
     return res
 
 def bit_ops_test():
@@ -53,12 +53,25 @@ def bit_ops_test():
 def list2d_test():
     mask = 65535
     for i in range(1000000):
-        val = list2d[0][1]
+        for j in range(6):
+            for k in range(6):
+                if list2d[j][k] != 0:
+                    val = list2d[j][k]
 
 def mask_test():
     mask = 65535
     for i in range(1000000):
         val = mask & mask
+    
+def tuple_test():
+    dict = {}
+    for i in range(1000000):
+        dict[(i, i, i, i, i, i)] = (i, i, i)
 
-test_efficiency(list2d_test)
-test_efficiency(dict_test)
+def big_int_test():
+    dict = {}
+    for i in range(1000000):
+        dict[i | i << 36 | i << 72 | i << 108] = (i, i, i)
+
+test_efficiency(tuple_test)
+test_efficiency(list_test)
