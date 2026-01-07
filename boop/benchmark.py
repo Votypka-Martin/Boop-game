@@ -27,12 +27,10 @@ def board_key(board, mask):
         return board & 65535
 
 def list_test():
-    mask = 65535
     for i in range(1000000):
-        val = list[i & mask]
+        val = [i, i , i , i]
 
 def dict_test():
-    mask = 1 << 36 - 1
     for i in range(1000000):
         val = dict.get(i)
 
@@ -64,9 +62,8 @@ def mask_test():
         val = mask & mask
     
 def tuple_test():
-    dict = {}
     for i in range(1000000):
-        dict[(i, i, i, i, i, i)] = (i, i, i)
+        val = (i, i, i, i)
 
 def big_int_test():
     dict = {}
@@ -75,3 +72,4 @@ def big_int_test():
 
 test_efficiency(tuple_test)
 test_efficiency(list_test)
+test_efficiency(dict_test)
