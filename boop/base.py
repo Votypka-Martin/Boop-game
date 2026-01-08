@@ -151,8 +151,8 @@ class Base:
             draw.line([x0+i*self.cellSize,0,x0+i*self.cellSize, y0+6*self.cellSize ], fill = _gridColor, width = 2)
 
         animalsOnBoard = self.countAnimals(board)
-        drawAnimals(self.kittens, self.cats, self.player)
-        drawAnimals(self.otherKittens, self.otherCats, -self.player)
+        drawAnimals(self.kittens - animalsOnBoard[self.player*1], self.cats - animalsOnBoard[self.player*2], self.player)
+        drawAnimals(self.otherKittens - animalsOnBoard[-self.player*1], self.otherCats - animalsOnBoard[-self.player*2], -self.player)
 
         eps = 2
         draw.line([x0,y0+eps,  x0+self.cellSize*6,y0+eps, x0+self.cellSize*6-eps,y0 + self.cellSize*6-eps, x0, self.cellSize*6-eps, x0, y0], fill = _gridColor, width = 5 )
@@ -194,10 +194,11 @@ def updatePlayer(activePlayer, passivePlayer, newBoard, row, col, animalPlaced, 
     if animals[-2] == 8 or animals[2] == 8:
         return True
     
-    passivePlayer.otherCats = activePlayer.cats
-    passivePlayer.otherKittens = activePlayer.kittens
-    passivePlayer.kittens = activePlayer.otherKittens
-    passivePlayer.cats = activePlayer.otherCats
+    if animalPlaced == 10:
+        activePlayer.cats += 1
+        activePlayer.kittens -= 1
+        passivePlayer.otherCats += 1
+        passivePlayer.otherKittens -= 1
 
     if len(triple) == 3 or animalPlaced == 10:
 
@@ -215,7 +216,8 @@ def updatePlayer(activePlayer, passivePlayer, newBoard, row, col, animalPlaced, 
             return True
 
         if (numKittens > 0) and (numCats + numKittens == 3):
-            activePlayer.cats += 3
+            activePlayer.kittens -= numKittens
+            activePlayer.cats += numKittens
         passivePlayer.otherCats = activePlayer.cats
         passivePlayer.otherKittens = activePlayer.kittens
 

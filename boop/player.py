@@ -36,15 +36,16 @@ class MovePos:
         [0,0,0,0,0],
         [1,0,1,0,1]
     ]
-
+    valid_bits = tuple(i for i in range(42) if i % 7 != 6)
     first_bit_indexes = [(1,1), (1, 2), (1, 3), (2, 1), (2, 3), (3, 1), (3, 2), (3, 3)]
     second_bit_indexes = [(0, 0), (0, 2), (0, 4), (2, 0), (2, 4), (4, 0), (4, 2), (4, 4)]
+    mask = 0b011111101111110111111011111101111110111111
 
     @classmethod
     def combine(cls, board, mask, index):
         board = [[0]*6 for _ in range(6)]
-        dx = index % 6 - 2
-        dy = index // 6 - 2
+        dx = index % 7 - 2
+        dy = index // 7 - 2
         for y in range(5):
             if y + dy < 0 or y + dy >= 6:
                 continue
@@ -58,8 +59,8 @@ class MovePos:
     @classmethod
     def get_first_bit_mask(cls, second_bit_mask, index):
         bit_board = [[0]*6 for _ in range(6)]
-        x = index % 6
-        y = index // 6
+        x = index % 7
+        y = index // 7
         if x - 2 >= 0:
             if second_bit_mask[y][x-2] == 1: 
                 bit_board[y][x-1] = 1
@@ -84,8 +85,8 @@ class MovePos:
     @classmethod
     def get_second_bit_mask(cls, first_bit_mask, index):
         bit_board = [[0]*6 for _ in range(6)]
-        x = index % 6
-        y = index // 6
+        x = index % 7
+        y = index // 7
         if x - 2 >= 0:
             if first_bit_mask[y][x-1] == 1:
                 bit_board[y][x-2] = 1
@@ -125,26 +126,31 @@ class MovePos:
         for y in range(6):
             for x in range(6):
                 if board[y][x] == 1:
-                    bit_board |= 1 << (y*6 + x)
+                    bit_board |= 1 << (y*7 + x)
         return bit_board
     
     @classmethod
     def bitboard_to_string(cls, bitboard):
         s = ""
-        for i in range(36):
-            s += str((bitboard >> i) & 1) + ("\n" if (i % 6 == 5) else "")
+        for i in range(42):
+            if i % 7 == 6:
+                s += "\n"
+                continue
+            s += str((bitboard >> i) & 1)
         return s
                 
 
     def __init__(self, index, value):
+        if index % 7 == 6:
+            return
         self.index = index
         self.pos = (1 << index)
-        self.pos_zero = (1 << (36 - 1)) ^ self.pos
+        self.pos_zero = MovePos.mask ^ self.pos
         self.value = value
         self.create_bit_masks()
 
     def create_bit_masks(self):
-        mask = (1 << 36) - 1
+        mask = MovePos.mask
         board = [[0]*6 for _ in range(6)]
         self.first_bit_mask = MovePos.to_bitboard(MovePos.combine(board, MovePos.first_bit_mask, self.index))
         self.second_bit_mask = MovePos.to_bitboard(MovePos.combine(board, MovePos.second_bit_mask, self.index))
@@ -198,22 +204,22 @@ class Player(BASE.Base):
         self.studentTag = "Boop master"
         self.__current_move = 0
         self.__move_default_values = [
-            1,1,1,1,1,1,
-            1,5,5,5,5,1,
-            1,5,7,7,5,1,
-            1,5,7,7,5,1,
-            1,5,5,5,5,1,
-            1,1,1,1,1,1
+            1,1,1,1,1,1,0,
+            1,5,5,5,5,1,0,
+            1,5,7,7,5,1,0,
+            1,5,7,7,5,1,0,
+            1,5,5,5,5,1,0,
+            1,1,1,1,1,1,0,
         ]
-        self.__move_pos = [MovePos(i, self.__move_default_values[i]) for i in range(36)]
+        self.__move_pos = [MovePos(i, self.__move_default_values[i]) for i in range(42)]
         self.__cat_stack_counts = {}
         self.__create_cat_stack_counts()
         self.__bit_counts = {0: 0}
         self.__create_bit_counts(3)
         self.__transposition_table = {}
-        self.__outer_square_mask = 0b111111100001100001100001100001111111
-        self.__mid_square_mask = 0b000000011110010010010010011110000000
-        self.__inner_square_mask = 0b000000000000001100001100000000000000
+        self.__outer_square_mask = 0b011111101000010100001010000101000010111111
+        self.__mid_square_mask = 0b000000000111100010010001001000111100000000
+        self.__inner_square_mask = 0b000000000000000001100000110000000000000000
 
     def play(self):
         self.__current_move += 1
@@ -224,20 +230,20 @@ class Player(BASE.Base):
         p_k_board, e_k_board, p_c_board, e_c_board = self.__generate_bitboards()
         board = p_k_board | e_k_board | p_c_board | e_c_board
         if board == 0: 
-            self.kittens-=1
-            return [[3, 3], self.player, self.__generate_board(1 << 21, 0, 0, 0), []]
+            return [[3, 3], self.player, self.__generate_board(1 << 24, 0, 0, 0), []]
         default_move = Move(self.__move_pos[0], 0)
         default_move.boards = p_k_board, e_k_board, p_c_board, e_c_board
-        default_move.p_kitten_count = self.kittens
-        default_move.e_kitten_count = self.otherKittens
-        default_move.p_cat_count = self.cats
-        default_move.e_cat_count = self.otherCats
+        animals = self.countAnimals(self.board)
+        default_move.p_kitten_count = self.kittens - animals[self.player]
+        default_move.e_kitten_count = self.otherKittens - animals[-self.player]
+        default_move.p_cat_count = self.cats - animals[2 * self.player]
+        default_move.e_cat_count = self.otherCats - animals[-2 * self.player]
         end_time = time.perf_counter() + self.timeOut * 0.95
         depth = 3
         best_move = None
         best_move_value = -10000000
         win = False
-        moves = self.__get_possible_moves(self.kittens, self.cats, board)
+        moves = self.__get_possible_moves(default_move.p_kitten_count, default_move.p_cat_count, board)
         if len(moves) == 0:
             return []
         filtered_moves = []
@@ -252,7 +258,7 @@ class Player(BASE.Base):
             m.value += self.__eval_move(m)
             filtered_moves.append(m)
 
-        while depth < 5 and not win:
+        while time.perf_counter() < end_time and not win:
             for m in filtered_moves: 
                 tt_entry = tt.get(m.boards)
                 if tt_entry is not None:
@@ -266,6 +272,7 @@ class Player(BASE.Base):
                 if m_value >= 900000:
                     win = True
                     break
+                tt[m.boards] = TTEntry(m_value, depth, 1)
             depth += 2
             best_move_value = -10000000
 
@@ -275,16 +282,8 @@ class Player(BASE.Base):
         self.__play_final_move(best_move, default_move, board)
         final_board = self.__generate_board(best_move.boards[0], best_move.boards[1], best_move.boards[2], best_move.boards[3])
         triples = self.__get_triples(final_board)
-        self.kittens = best_move.p_kitten_count
-        self.cats = best_move.p_cat_count
-        self.otherKittens = best_move.e_kitten_count
-        self.otherCats = best_move.e_cat_count
         self.board = final_board
-        self.kittens = best_move.p_kitten_count
-        self.cats = best_move.p_cat_count
-        self.otherKittens = best_move.e_kitten_count
-        self.otherCats = best_move.e_cat_count
-        return [[best_move.move_pos.index // 6, best_move.move_pos.index % 6], best_move.type * self.player if best_move.type != 10 else 10, copy.deepcopy(final_board), triples]
+        return [[best_move.move_pos.index // 7, best_move.move_pos.index % 7], best_move.type * self.player if best_move.type != 10 else 10, copy.deepcopy(final_board), triples]
     
     def __get_triples(self, board):
         cat_triples = []
@@ -322,25 +321,28 @@ class Player(BASE.Base):
             return cell1 + cell2 + cell3 < 6
 
     def __create_bit_counts(self, max_bit_count, pos = 0, key = 0, count = 1):
-        if max_bit_count == 0 or pos == 36:
+        if max_bit_count == 0 or pos == 42:
             return
-        for i in range(pos, 36):
+        for i in range(pos, 42):
+            if i % 7 == 6:
+                continue
             new_key = key | 1 << i
             self.__bit_counts[new_key] = count
             self.__create_bit_counts(max_bit_count - 1, i + 1, new_key, count + 1)
 
     def __create_cat_stack_counts(self):
         self.__cat_stack_counts[0] = 0
-        for i in range(36):
+        for i in MovePos.valid_bits:
             self.__cat_stack_counts[1 << i] = 3
-        for i in range(36):
-            for j in range(i + 1, 36):
-                self.__cat_stack_counts[1 << i | 1 << j] = 6
+        for i in range(len(MovePos.valid_bits)):
+            for j in range(i + 1, len(MovePos.valid_bits)):
+                x = MovePos.valid_bits[j]
+                y = MovePos.valid_bits[i]
+                self.__cat_stack_counts[1 << x | 1 << y] = 6
 
     def __play(self, move, depth, reverse_depth, depth_increment, alpha, beta, end_time):
         p_k_count, p_c_count= move.p_kitten_count, move.p_cat_count
-        if p_k_count == 0 and p_c_count == 0:
-            return 1000000 - reverse_depth
+        
         
         o_alpha = alpha
         o_beta = beta
@@ -361,12 +363,16 @@ class Player(BASE.Base):
                 if alpha >= beta:
                     return tt_entry.value
 
-        if depth <= 0 :#or end_time < time.perf_counter():
+        if depth <= 0 or end_time < time.perf_counter():
+            if tt_entry is not None:
+                return tt_entry.value
             return move.value
 
         board = p_k_board | e_k_board | p_c_board | e_c_board
        
         moves = self.__get_possible_moves(p_k_count, p_c_count, board)
+        if len(moves) == 0:
+            return 1000000 - reverse_depth
         filtered_moves = []
         for m in moves:
             self.__play_move(m, move, board)
@@ -386,7 +392,7 @@ class Player(BASE.Base):
                 m.value += self.__eval_move(m)
             filtered_moves.append(m)
         filtered_moves.sort(key = lambda move: move.value, reverse = True)
-        depth_search = max(36 - reverse_depth * 7, 4)
+        depth_search = max(15 - reverse_depth, 4)
         i = 0
         for m in filtered_moves:
             value = max(value, self.__play_enemy(m, depth - depth_increment, reverse_depth + depth_increment, depth_increment, alpha, beta, end_time))
@@ -408,8 +414,6 @@ class Player(BASE.Base):
 
     def __play_enemy(self, move, depth, reverse_depth, depth_increment, alpha, beta, end_time):
         e_k_count, e_c_count= move.e_kitten_count, move.e_cat_count
-        if e_k_count == 0 and e_c_count == 0:
-            return -1000000 + reverse_depth
         
         o_alpha = alpha
         o_beta = beta
@@ -430,12 +434,16 @@ class Player(BASE.Base):
                 if alpha >= beta:
                     return tt_entry.value
         
-        if depth <= 0: #or end_time < time.perf_counter():
+        if depth <= 0 or end_time < time.perf_counter():
+            if tt_entry is not None:
+                return tt_entry.value
             return move.value
 
         board = p_k_board | e_k_board | p_c_board | e_c_board
        
         moves = self.__get_possible_moves(e_k_count, e_c_count, board)
+        if len(moves) == 0:
+            return -1000000 + reverse_depth
         filtered_moves= []
         for m in moves:
             self.__play_move(m, move, board, False)
@@ -455,7 +463,7 @@ class Player(BASE.Base):
                 m.value += self.__eval_move(m)
             filtered_moves.append(m)
         filtered_moves.sort(key = lambda move: move.value)
-        depth_search = max(36 - reverse_depth * 7, 4)
+        depth_search = max(15 - reverse_depth, 4)
         i = 0
         for m in filtered_moves:
             value = min(value, self.__play(m, depth - depth_increment, reverse_depth + depth_increment, depth_increment, alpha, beta, end_time))
@@ -480,20 +488,21 @@ class Player(BASE.Base):
     def __get_possible_moves(self, p_kittens: int, p_cats: int, board: int) -> list[Move]:
         i = 0
         moves = []
+        valid_bits = MovePos.valid_bits
         if p_cats + p_kittens == 0:
-            for i in range(36):
+            for i in valid_bits:
                 if board & (1 << i) > 0:
                     moves.append(Move(self.__move_pos[i], 10))
         elif p_cats == 0:
-            for i in range(36):
+            for i in valid_bits:
                 if board & (1 << i) == 0:
                     moves.append(Move(self.__move_pos[i], 1))
         elif p_kittens == 0:
-            for i in range(36):
+            for i in valid_bits:
                 if board & (1 << i) == 0:
                     moves.append(Move(self.__move_pos[i], 2))
         else:
-            for i in range(36):
+            for i in valid_bits:
                 if board & (1 << i) == 0:
                     moves.append(Move(self.__move_pos[i], 1))
                     moves.append(Move(self.__move_pos[i], 2))
@@ -506,6 +515,7 @@ class Player(BASE.Base):
         if type == 10:
             move.boards = player_kittens_board & move.move_pos.pos_zero, enemy_kittens_board, player_cats_board, enemy_cats_board
             move.p_cat_count += 1
+            return
 
         move_pos = move.move_pos
         first_bit_mask, second_bit_mask = move_pos.first_bit_mask, move_pos.second_bit_mask
@@ -679,24 +689,24 @@ class Player(BASE.Base):
             mask2 = hor
             if mask1 & kittens > 0:
                 return mask1, mask2
-        ver = board & (board >> 6) & (board >> 12)
+        ver = board & (board >> 7) & (board >> 14)
         if ver > 0:
-            ver &= ~(ver & (ver >> 6))
-            mask1 = ver | ver << 6 | ver << 12
+            ver &= ~(ver & (ver >> 7))
+            mask1 = ver | ver << 7 | ver << 14
             mask2 = ver
             if mask1 & kittens > 0:
                 return mask1, mask2
-        dig1 = board & (board >> 7) & (board >> 14)
+        dig1 = board & (board >> 8) & (board >> 16)
         if dig1 > 0:
-            dig1 &= ~(dig1 & (dig1 >> 7))
-            mask1 = dig1 | dig1 << 7 | dig1 << 14
+            dig1 &= ~(dig1 & (dig1 >> 8))
+            mask1 = dig1 | dig1 << 8 | dig1 << 16
             mask2 = dig1
             if mask1 & kittens > 0:
                 return mask1, mask2
-        dig2 = board & (board >> 5) & (board >> 10)
+        dig2 = board & (board >> 6) & (board >> 12)
         if dig2 > 0:
-            dig2 &= ~(dig2 & (dig2 >> 5))
-            mask1 = dig2 | dig2 << 5 | dig2 << 10
+            dig2 &= ~(dig2 & (dig2 >> 6))
+            mask1 = dig2 | dig2 << 6 | dig2 << 12
             mask2 = dig2
             if mask1 & kittens > 0:
                 return mask1, mask2
@@ -705,19 +715,19 @@ class Player(BASE.Base):
     def __is_winning(self,cat_board):
         if (cat_board & (cat_board >> 1) & (cat_board >> 2)) != 0:
             return True
-        if (cat_board & (cat_board >> 6) & (cat_board >> 12)) != 0:
-            return True
         if (cat_board & (cat_board >> 7) & (cat_board >> 14)) != 0:
             return True
-        if (cat_board & (cat_board >> 5) & (cat_board >> 10)) != 0:
+        if (cat_board & (cat_board >> 8) & (cat_board >> 16)) != 0:
+            return True
+        if (cat_board & (cat_board >> 6) & (cat_board >> 12)) != 0:
             return True
         return False
     
     def __connected_two(self, board):
         hor = board & (board >> 1)
-        ver = board & (board >> 6)
-        dig1 = board & (board >> 7)
-        dig2 = board & (board >> 5)
+        ver = board & (board >> 7)
+        dig1 = board & (board >> 8)
+        dig2 = board & (board >> 6)
         return hor | ver | dig1 | dig2
     
     def __generate_bitboards(self):
@@ -738,20 +748,21 @@ class Player(BASE.Base):
                 elif val == -2:
                     enemy_cat_bitboard |= 1 << i
                 i += 1
+            i+=1
 
         return kitten_bitboard, enemy_kitten_bitboard, cat_bitboard,  enemy_cat_bitboard
     
     def __generate_board(self, kitten_bitboard, enemy_kitten_bitboard, cat_bitboard, enemy_cat_bitboard):
         board = [[0] * 6 for _ in range(6)]
-        for i in range(36):
+        for i in MovePos.valid_bits:
             if kitten_bitboard & (1 << i) > 0:
-                board[i // 6][i % 6] = 1 * self.player
+                board[i // 7][i % 7] = 1 * self.player
             elif cat_bitboard & (1 << i) > 0:
-                board[i // 6][i % 6] = 2 * self.player
+                board[i // 7][i % 7] = 2 * self.player
             elif enemy_kitten_bitboard & (1 << i) > 0:
-                board[i // 6][i % 6] = -1 * self.player
+                board[i // 7][i % 7] = -1 * self.player
             elif enemy_cat_bitboard & (1 << i) > 0:
-                board[i // 6][i % 6] = -2 * self.player
+                board[i // 7][i % 7] = -2 * self.player
         return board
     
     def print_board(self):
@@ -779,6 +790,7 @@ The simple game here assumes that you play correctly. There are no checks here i
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
 
+
 if __name__ == "__main__":
     p1 = Player("Positive player",1)     #we create two instances of your player. One for +1 color
     p2 = Player("Negative player",-1)    #and second for the -1 color
@@ -793,9 +805,7 @@ if __name__ == "__main__":
     p1.otherKittens = p2.kittens
     p2.otherCats = p1.cats
     p2.otherKittens = p1.kittens
-
-    #p1.draw(p1.board, "base.png")       #draw (empty) board and save in into base.png
-    
+    p1.draw(p1.board, "base.png")       #draw (empty) board and save in into base.png
     moveIdx = 0                         #index of the move, also use to index images
     while True:
         move1 = p1.play()               #the first player is on move
@@ -803,22 +813,20 @@ if __name__ == "__main__":
             move, animal, newboard, triple = move1  #unpack the move
             isEnd = BASE.updatePlayer(p1,p2,newboard, move[0], move[1], animal, triple, "move-{:03d}-p1".format(moveIdx))  #update the players, and save image
             clear()
-            print("Move:", move, "Animal:", animal, "Triple:", triple, "\n")
+            print("Move:", move, "Animal:", animal, "Triple:", triple, "Kittens:", p1.kittens, "Cats:", p1.cats, "\n")
             p1.print_board()
-            input("Press enter to continue")
             if isEnd:
                 print(p1.studentName, "wins")
                 break
 
         move2 = p2.play()               #the second player is on move
         if len(move2) > 0:
-            last_board = p1.board
+            
             move, animal, newboard, triple = move2  #unpack move
             isEnd = BASE.updatePlayer(p2,p1,newboard, move[0], move[1], animal, triple, "move-{:03d}-p2".format(moveIdx))
             clear()
-            print("Move:", move, "Animal:", animal, "Triple:", triple, "\n")
+            print("Move:", move, "Animal:", animal, "Triple:", triple,"Kittens:", p2.kittens, "Cats:", p2.cats, "\n")
             p2.print_board()
-            input("Press enter to continue")
             if isEnd:
                 print(p2.studentName,"wins")
                 break
@@ -831,7 +839,7 @@ if __name__ == "__main__":
             print("Maximum number of moves reached")
             break
 
-print("End of game")            
+    print("End of game")            
 
 
 
