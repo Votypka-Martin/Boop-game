@@ -1,5 +1,9 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
 import math
+import tkinter as tk
+from tkinter import ttk
+import threading
+import queue
 import copy
 
 
@@ -12,6 +16,7 @@ If you need to define your own variables and methods, do it in the constructor o
 """
 
 class Base:
+    image_queue = queue.Queue()
     def __init__(self, player):
         self.board = [ [0]*6 for _ in range(6) ]
 
@@ -53,6 +58,34 @@ class Base:
                 if v == 1 or v == 2:
                     animals[ board[row][col] ] += 1
         return animals
+    
+    @classmethod
+    def init_gui(cls):
+        
+        def create_window():
+            cls.window = tk.Tk()
+            cls.window.title("Boopzilla")
+            cls.window.geometry("1200x800")
+            notebook = ttk.Notebook(cls.window)
+            notebook.pack(fill="both", expand=True)
+            cls.display = notebook
+            cls.images = []
+            def check_queue():
+                while not cls.image_queue.empty():
+                    image, name = cls.image_queue.get()
+                    cls.images.append(image)
+                    frame = tk.Frame(cls.display)
+                    label = tk.Label(frame, image=image)
+                    label.pack(padx=10, pady=10)
+                    cls.display.add(frame, text=name)
+                cls.window.after(100, check_queue)
+            check_queue()
+            cls.window.mainloop()
+        
+        t = threading.Thread(target=create_window)
+        t.daemon = True
+        t.start()
+        cls.ui_thread = t
 
 
     def inside(self, row, col):
@@ -157,7 +190,12 @@ class Base:
         eps = 2
         draw.line([x0,y0+eps,  x0+self.cellSize*6,y0+eps, x0+self.cellSize*6-eps,y0 + self.cellSize*6-eps, x0, self.cellSize*6-eps, x0, y0], fill = _gridColor, width = 5 )
                 
-        img.save(filename)
+        if Base.display != None:
+            image = ImageTk.PhotoImage(img)
+            name = filename.split(".")[0]
+            Base.image_queue.put( (image, name) )
+        else:
+            img.save(filename)
 
     def printBoard(self, board):
         for row in board:

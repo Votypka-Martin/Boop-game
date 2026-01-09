@@ -798,6 +798,7 @@ def clear():
 
 
 if __name__ == "__main__":
+    BASE.Base.init_gui()
     p1 = Player("Positive player",1)     #we create two instances of your player. One for +1 color
     p2 = Player("Negative player",-1)    #and second for the -1 color
 
@@ -843,7 +844,12 @@ if __name__ == "__main__":
             print("Maximum number of moves reached")
             break
 
-    print("End of game")            
+    print("End of game")   
+
+    while True:
+        time.sleep(1)
+        if not BASE.Base.ui_thread.is_alive(): 
+            break      
 
 
 
