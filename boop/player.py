@@ -221,7 +221,7 @@ class Player(BASE.Base):
         self.__mid_square_mask = 0b000000000111100010010001001000111100000000
         self.__inner_square_mask = 0b000000000000000001100000110000000000000000
 
-    def play(self):
+    def play(self):      
         self.__current_move += 1
         if self.__current_move > self.maxMoves:
             return []
@@ -230,7 +230,7 @@ class Player(BASE.Base):
         p_k_board, e_k_board, p_c_board, e_c_board = self.__generate_bitboards()
         board = p_k_board | e_k_board | p_c_board | e_c_board
         if board == 0: 
-            return [[3, 3], self.player, self.__generate_board(1 << 24, 0, 0, 0), []]
+            return [3, 3, self.player, self.__generate_board(1 << 24, 0, 0, 0), []]
         default_move = Move(self.__move_pos[0], 0)
         default_move.boards = p_k_board, e_k_board, p_c_board, e_c_board
         animals = self.countAnimals(self.board)
@@ -239,19 +239,21 @@ class Player(BASE.Base):
         default_move.p_cat_count = self.cats - animals[2 * self.player]
         default_move.e_cat_count = self.otherCats - animals[-2 * self.player]
         end_time = time.perf_counter() + self.timeOut * 0.95
-        depth = 3
-        best_move = None
-        best_move_value = -10000000
+        depth = 4
+        
         win = False
-        moves = self.__get_possible_moves(default_move.p_kitten_count, default_move.p_cat_count, board)
+        moves = self.__get_possible_moves(default_move.p_kitten_count, default_move.p_cat_count, board, p_k_board)
         if len(moves) == 0:
             return []
+        best_move = moves[0]
+        best_move_value = -10000000
         filtered_moves = []
         for m in moves:
             self.__play_move(m, default_move, board)
             if m.is_winning:
                 best_move = m
                 win = True
+                tt[m.boards] = TTEntry(1000000, depth, 1)
                 break 
             if m.is_losing:
                 continue
@@ -265,7 +267,7 @@ class Player(BASE.Base):
                     m.value = tt_entry.value
             filtered_moves.sort(key = lambda move: move.value, reverse = True)
             for m in filtered_moves:
-                m_value = self.__play_enemy(m, depth, 0, 1, -10000000, 10000000, end_time)
+                m_value = self.__play_enemy(m, depth, 0, -10000000, 10000000, end_time)
                 if m_value > best_move_value:
                     best_move_value = m_value
                     best_move = m
@@ -274,16 +276,17 @@ class Player(BASE.Base):
                     break
                 tt[m.boards] = TTEntry(m_value, depth, 1)
             depth += 2
+            tt[best_move.boards] = TTEntry(best_move_value, depth, 1)
             best_move_value = -10000000
 
         if best_move is None:
             return []
-        
         self.__play_final_move(best_move, default_move, board)
         final_board = self.__generate_board(best_move.boards[0], best_move.boards[1], best_move.boards[2], best_move.boards[3])
         triples = self.__get_triples(final_board)
         self.board = final_board
-        return [[best_move.move_pos.index // 7, best_move.move_pos.index % 7], best_move.type * self.player if best_move.type != 10 else 10, copy.deepcopy(final_board), triples]
+        
+        return [best_move.move_pos.index // 7, best_move.move_pos.index % 7, best_move.type * self.player if best_move.type != 10 else 10, copy.deepcopy(final_board), triples]
     
     def __get_triples(self, board):
         cat_triples = []
@@ -340,7 +343,7 @@ class Player(BASE.Base):
                 y = MovePos.valid_bits[i]
                 self.__cat_stack_counts[1 << x | 1 << y] = 6
 
-    def __play(self, move, depth, reverse_depth, depth_increment, alpha, beta, end_time):
+    def __play(self, move, depth, reverse_depth, alpha, beta, end_time):
         p_k_count, p_c_count= move.p_kitten_count, move.p_cat_count
         
         
@@ -370,7 +373,7 @@ class Player(BASE.Base):
 
         board = p_k_board | e_k_board | p_c_board | e_c_board
        
-        moves = self.__get_possible_moves(p_k_count, p_c_count, board)
+        moves = self.__get_possible_moves(p_k_count, p_c_count, board, p_k_board)
         if len(moves) == 0:
             return 1000000 - reverse_depth
         filtered_moves = []
@@ -392,15 +395,16 @@ class Player(BASE.Base):
                 m.value += self.__eval_move(m)
             filtered_moves.append(m)
         filtered_moves.sort(key = lambda move: move.value, reverse = True)
-        depth_search = max(15 - reverse_depth, 4)
         i = 0
+        search_width = 15 - reverse_depth
+        depth_increment = 1
         for m in filtered_moves:
-            value = max(value, self.__play_enemy(m, depth - depth_increment, reverse_depth + depth_increment, depth_increment, alpha, beta, end_time))
+            value = max(value, self.__play_enemy(m, depth - depth_increment, reverse_depth + 1, alpha, beta, end_time))
             if value >= beta:
                 break
             alpha = max(alpha, value)
             i += 1
-            if i % depth_search == 0:
+            if i % search_width == 0:
                 depth_increment += 1
         if value <= o_alpha:
             flag = 2
@@ -412,7 +416,7 @@ class Player(BASE.Base):
         tt[key] = tt_entry
         return value
 
-    def __play_enemy(self, move, depth, reverse_depth, depth_increment, alpha, beta, end_time):
+    def __play_enemy(self, move, depth, reverse_depth, alpha, beta, end_time):
         e_k_count, e_c_count= move.e_kitten_count, move.e_cat_count
         
         o_alpha = alpha
@@ -441,7 +445,7 @@ class Player(BASE.Base):
 
         board = p_k_board | e_k_board | p_c_board | e_c_board
        
-        moves = self.__get_possible_moves(e_k_count, e_c_count, board)
+        moves = self.__get_possible_moves(e_k_count, e_c_count, board, e_k_board)
         if len(moves) == 0:
             return -1000000 + reverse_depth
         filtered_moves= []
@@ -463,15 +467,16 @@ class Player(BASE.Base):
                 m.value += self.__eval_move(m)
             filtered_moves.append(m)
         filtered_moves.sort(key = lambda move: move.value)
-        depth_search = max(15 - reverse_depth, 4)
         i = 0
+        search_width = 15 - reverse_depth
+        depth_increment = 1
         for m in filtered_moves:
-            value = min(value, self.__play(m, depth - depth_increment, reverse_depth + depth_increment, depth_increment, alpha, beta, end_time))
+            value = min(value, self.__play(m, depth - depth_increment, reverse_depth + 1, alpha, beta, end_time))
             if value <= alpha:
                 break
             beta = min(beta, value)
             i += 1
-            if i % depth_search == 0:
+            if i % search_width == 0:
                 depth_increment += 1
 
         if value <= o_alpha:
@@ -485,13 +490,13 @@ class Player(BASE.Base):
         tt[key] = tt_entry
         return value
     
-    def __get_possible_moves(self, p_kittens: int, p_cats: int, board: int) -> list[Move]:
+    def __get_possible_moves(self, p_kittens: int, p_cats: int, board: int, kitten_board: int) -> list[Move]:
         i = 0
         moves = []
         valid_bits = MovePos.valid_bits
         if p_cats + p_kittens == 0:
             for i in valid_bits:
-                if board & (1 << i) > 0:
+                if kitten_board & (1 << i) > 0:
                     moves.append(Move(self.__move_pos[i], 10))
         elif p_cats == 0:
             for i in valid_bits:
@@ -643,6 +648,7 @@ class Player(BASE.Base):
             enemy_kittens_board &= e_mask
             enemy_cats_board &= e_mask
 
+        move.boards = player_kittens_board, enemy_kittens_board, player_cats_board, enemy_cats_board
         move.is_winning = False
         move.is_losing = False
 
@@ -654,7 +660,7 @@ class Player(BASE.Base):
         if move.is_winning or move.is_losing:
             return
         
-        move.boards = player_kittens_board, enemy_kittens_board, player_cats_board, enemy_cats_board
+        
         move.value = (move_pos.value if player else -move_pos.value) + (e_kittens - p_kittens) * 10 + (e_cats - p_cats) * 100 + (promoted_p_cats - promoted_e_cats) * 100
        
         move.p_kitten_count += p_kittens
@@ -810,10 +816,9 @@ if __name__ == "__main__":
     while True:
         move1 = p1.play()               #the first player is on move
         if len(move1) > 0:
-            move, animal, newboard, triple = move1  #unpack the move
-            isEnd = BASE.updatePlayer(p1,p2,newboard, move[0], move[1], animal, triple, "move-{:03d}-p1".format(moveIdx))  #update the players, and save image
-            clear()
-            print("Move:", move, "Animal:", animal, "Triple:", triple, "Kittens:", p1.kittens, "Cats:", p1.cats, "\n")
+            row, col, animal, newboard, triple = move1  #unpack the move
+            isEnd = BASE.updatePlayer(p1,p2,newboard, row, col, animal, triple, "move-{:03d}-p1".format(moveIdx))  #update the players, and save image
+            print("Move:", (row, col), "Animal:", animal, "Triple:", triple, "Kittens:", p1.kittens, "Cats:", p1.cats, "Other Kittens:", p1.otherKittens, "Other Cats:", p1.otherCats, "\n")
             p1.print_board()
             if isEnd:
                 print(p1.studentName, "wins")
@@ -822,10 +827,9 @@ if __name__ == "__main__":
         move2 = p2.play()               #the second player is on move
         if len(move2) > 0:
             
-            move, animal, newboard, triple = move2  #unpack move
-            isEnd = BASE.updatePlayer(p2,p1,newboard, move[0], move[1], animal, triple, "move-{:03d}-p2".format(moveIdx))
-            clear()
-            print("Move:", move, "Animal:", animal, "Triple:", triple,"Kittens:", p2.kittens, "Cats:", p2.cats, "\n")
+            row, col, animal, newboard, triple = move2  #unpack move
+            isEnd = BASE.updatePlayer(p2,p1,newboard, row, col, animal, triple, "move-{:03d}-p2".format(moveIdx))
+            print("Move:", (row, col), "Animal:", animal, "Triple:", triple,"Kittens:", p2.kittens, "Cats:", p2.cats, "Other Kittens:", p2.otherKittens, "Other Cats:", p2.otherCats, "\n")
             p2.print_board()
             if isEnd:
                 print(p2.studentName,"wins")
