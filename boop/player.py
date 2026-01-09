@@ -674,8 +674,15 @@ class Player(BASE.Base):
 
     def __eval_move(self, move: Move):
         player_kittens_board, enemy_kittens_board, player_cats_board, enemy_cats_board = move.boards
+        p_cats, e_cats, p_kittens, e_kittens = move.p_cat_count, move.e_cat_count, move.p_kitten_count, move.e_kitten_count
         p_con_two = self.__bit_counts.get(self.__connected_two(player_cats_board), 4)
         e_con_two = self.__bit_counts.get(self.__connected_two(enemy_cats_board), 4)
+
+        if p_con_two > 0 and e_cats == 0:
+            return 10000
+        if e_con_two > 0 and p_cats == 0:
+            return -10000
+        
         p_outer_cats = self.__bit_counts.get(player_cats_board & self.__outer_square_mask, 4)
         e_outer_cats = self.__bit_counts.get(enemy_cats_board & self.__outer_square_mask, 4)
         p_mid_cats = self.__bit_counts.get(player_cats_board & self.__mid_square_mask, 4)
@@ -688,7 +695,7 @@ class Player(BASE.Base):
         p_mid_kittens = self.__bit_counts.get(player_kittens_board & self.__mid_square_mask, 4)
         e_mid_kittens = self.__bit_counts.get(enemy_kittens_board & self.__mid_square_mask, 4)
 
-        return (p_con_two - e_con_two) * 2000 + (p_inner_cats - e_inner_cats) * 200 + (p_mid_cats - e_mid_cats) * 100 + (p_outer_cats - e_outer_cats) * 10 + (p_inner_kittens - e_inner_kittens) * 10 + (p_mid_kittens - e_mid_kittens) * 5 + (move.p_cat_count - move.e_cat_count) * 50 + (move.e_kitten_count - move.p_kitten_count) * 5
+        return (p_con_two - e_con_two) * 2000 + (p_inner_cats - e_inner_cats) * 200 + (p_mid_cats - e_mid_cats) * 100 + (p_outer_cats - e_outer_cats) * 10 + (p_inner_kittens - e_inner_kittens) * 10 + (p_mid_kittens - e_mid_kittens) * 5 + (p_cats - e_cats) * 50 + (p_kittens - e_kittens) * 5
     
     def __replace_kittens_masks(self, kittens, cats):
         board = kittens | cats
