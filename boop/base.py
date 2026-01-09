@@ -25,7 +25,7 @@ class Base:
         self.otherKittens = 0       #the total number of kittens of the other player (a part can be on the board)
         self.otherCats = 0          #the total number of cats of the other player (a part can be on the board)
         self.player = player        #if I play with 1 or -1 animals
-        self.timeOut = 1            #timeout for constructor and play(). Will be filled by Brute
+        self.timeOut = 2            #timeout for constructor and play(). Will be filled by Brute
         self.maxMoves = 100         #max moves per game. Will be filled by Brute
 
         self.tournament = False     #true if the player is in tournament mode (filled by Brute)
@@ -62,6 +62,7 @@ class Base:
     @classmethod
     def init_gui(cls):
         
+        cls.stop_event = threading.Event()
         def create_window():
             cls.window = tk.Tk()
             cls.window.title("Boopzilla")
@@ -80,6 +81,11 @@ class Base:
                     cls.display.add(frame, text=name)
                 cls.window.after(100, check_queue)
             check_queue()
+            def on_close():
+                cls.stop_event.set()
+                cls.window.quit()
+
+            cls.window.protocol("WM_DELETE_WINDOW", on_close)
             cls.window.mainloop()
         
         t = threading.Thread(target=create_window)

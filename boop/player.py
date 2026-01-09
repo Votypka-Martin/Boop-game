@@ -239,7 +239,7 @@ class Player(BASE.Base):
         default_move.p_cat_count = self.cats - animals[2 * self.player]
         default_move.e_cat_count = self.otherCats - animals[-2 * self.player]
         end_time = time.perf_counter() + self.timeOut * 0.95
-        depth = 4
+        depth = 1
         
         win = False
         moves = self.__get_possible_moves(default_move.p_kitten_count, default_move.p_cat_count, board, p_k_board)
@@ -261,6 +261,7 @@ class Player(BASE.Base):
             filtered_moves.append(m)
 
         while time.perf_counter() < end_time and not win:
+            current_best_move = best_move
             for m in filtered_moves: 
                 tt_entry = tt.get(m.boards)
                 if tt_entry is not None:
@@ -270,12 +271,15 @@ class Player(BASE.Base):
                 m_value = self.__play_enemy(m, depth, 0, -10000000, 10000000, end_time)
                 if m_value > best_move_value:
                     best_move_value = m_value
-                    best_move = m
+                    current_best_move = m
                 if m_value >= 900000:
                     win = True
                     break
                 tt[m.boards] = TTEntry(m_value, depth, 1)
-            depth += 2
+            if time.perf_counter() >= end_time:
+                break
+            best_move = current_best_move
+            depth += 1
             tt[best_move.boards] = TTEntry(best_move_value, depth, 1)
             best_move_value = -10000000
 
@@ -285,7 +289,7 @@ class Player(BASE.Base):
         final_board = self.__generate_board(best_move.boards[0], best_move.boards[1], best_move.boards[2], best_move.boards[3])
         triples = self.__get_triples(final_board)
         self.board = final_board
-        
+        print("Depth: " + str(depth))
         return [best_move.move_pos.index // 7, best_move.move_pos.index % 7, best_move.type * self.player if best_move.type != 10 else 10, copy.deepcopy(final_board), triples]
     
     def __get_triples(self, board):
@@ -846,10 +850,8 @@ if __name__ == "__main__":
 
     print("End of game")   
 
-    while True:
-        time.sleep(1)
-        if not BASE.Base.ui_thread.is_alive(): 
-            break      
+    if BASE.Base.stop_event is not None:
+        BASE.Base.stop_event.wait()
 
 
 
