@@ -70,6 +70,11 @@ def big_int_test():
     for i in range(1000000):
         dict[i | i << 36 | i << 72 | i << 108] = (i, i, i)
 
+def bit_count_test():
+    mask = 0b011111101000010100001010000101000010111111
+    for i in range(1000000):
+        val = i.bit_count()
+
 test_efficiency(tuple_test)
-test_efficiency(list_test)
 test_efficiency(dict_test)
+test_efficiency(bit_count_test)
